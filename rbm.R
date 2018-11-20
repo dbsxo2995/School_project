@@ -31,37 +31,38 @@ sess <- tf$InteractiveSession()
 
 Hidden_count = 25 
 num_input = nrow(movies_df)
-vb <- tf$placeholder(tf$float32, shape = shape(num_input))    #Number of unique movies
-hb <- tf$placeholder(tf$float32, shape = shape(Hidden_count))   #Number of features we're going to learn
+vb <- tf$placeholder(tf$float32, shape = shape(num_input))   
+hb <- tf$placeholder(tf$float32, shape = shape(Hidden_count))  
 W <- tf$placeholder(tf$float32, shape = shape(num_input, Hidden_count))
 
-#Phase 1: Input Processing
+#정방향 과정
 v0 = tf$placeholder(tf$float32,shape= shape(NULL, num_input))
 prob_h0= tf$nn$sigmoid(tf$matmul(v0, W) + hb)
 h0 = tf$nn$relu(tf$sign(prob_h0 - tf$random_uniform(tf$shape(prob_h0))))
-#Phase 2: Reconstruction
+#역방향과정
+
 prob_v1 = tf$nn$sigmoid(tf$matmul(h0, tf$transpose(W)) + vb) 
 v1 = tf$nn$relu(tf$sign(prob_v1 - tf$random_uniform(tf$shape(prob_v1))))
 h1 = tf$nn$sigmoid(tf$matmul(v1, W) + hb)
 
-# RBM Parameters and functions
-#Learning rate
 alpha = 1.2
-#Create the gradients
+
+#그래디언트
 w_pos_grad = tf$matmul(tf$transpose(v0), h0)
 w_neg_grad = tf$matmul(tf$transpose(v1), h1)
-#Calculate the Contrastive Divergence to maximize
+
+#CD 함수
 CD = (w_pos_grad - w_neg_grad) / tf$to_float(tf$shape(v0)[1])
-#Create methods to update the weights and biases
+
+#가중치 업데이트
 update_w = W + alpha * CD
 update_vb = vb + alpha * tf$reduce_mean(v0 - v1)
 update_hb = hb + alpha * tf$reduce_mean(h0 - h1)
 
-# Mean Absolute Error Function.
+#그래프
 err = v0 - v1
 err_sum = tf$reduce_mean(err * err)
 
-# Initialise variables (current and previous)
 cur_w = tf$Variable(tf$zeros(shape = shape(num_input, Hidden_count), dtype=tf$float32))
 cur_vb = tf$Variable(tf$zeros(shape = shape(num_input), dtype=tf$float32))
 cur_hb = tf$Variable(tf$zeros(shape = shape(Hidden_count), dtype=tf$float32))
@@ -69,7 +70,6 @@ prv_w = tf$Variable(tf$random_normal(shape=shape(num_input, Hidden_count), stdde
 prv_vb = tf$Variable(tf$zeros(shape = shape(num_input), dtype=tf$float32))
 prv_hb = tf$Variable(tf$zeros(shape = shape(Hidden_count), dtype=tf$float32)) 
 
-# Start tensorflow session
 sess$run(tf$global_variables_initializer())
 output <- sess$run(list(update_w, update_vb, update_hb), feed_dict = dict(v0=train_set,
                                                                           W = prv_w$eval(),
@@ -80,7 +80,7 @@ prv_vb <- output[[2]]
 prv_hb <-  output[[3]]
 sess$run(err_sum, feed_dict=dict(v0=train_set, W= prv_w, vb= prv_vb, hb= prv_hb))
 
-# Train RBM
+#RBM 훈련과정
 epochs= 200
 errors <- list()
 weights <- list()
@@ -105,34 +105,27 @@ for(ep in 1:epochs){
   cat("epoch :", ep, " : reconstruction error : ", errors[length(errors)][[1]],"\n")
 }
 
-# Plot reconstruction error
 error_vec <- unlist(errors)
 plot(error_vec,xlab="배치 수",ylab="MSRE",main="재구성 평균제곱오차")
 error_vec
 
-
-# Recommendation
-#Selecting the input user
+#추천 - 랜덤하게 한명선택
 inputUser = as.matrix(t(train_set[300,]))
 names(inputUser) <- movies_df$id_order
 
-
-# Plot the top genre movies
 top_rated_movies <- movies_df[as.numeric(names(inputUser)[order(inputUser,decreasing = TRUE)]),]$Title
 top_rated_genres <- movies_df[as.numeric(names(inputUser)[order(inputUser,decreasing = TRUE)]),]$genres
 
 
 
-
-
-#Feeding in the user and reconstructing the input
 hh0 = tf$nn$sigmoid(tf$matmul(v0, W) + hb)
 vv1 = tf$nn$sigmoid(tf$matmul(hh0, tf$transpose(W)) + vb)
 feed = sess$run(hh0, feed_dict=dict( v0= inputUser, W= prv_w, hb= prv_hb))
 rec = sess$run(vv1, feed_dict=dict( hh0= feed, W= prv_w, vb= prv_vb))
 names(rec) <- movies_df$id_order
 top_recom_movies
-# Select all recommended movies
+
+
 top_recom_movies <- movies_df[as.numeric(names(rec)[order(rec,decreasing = TRUE)]),]$Title[1:10]
 top_recom_genres <- movies_df[as.numeric(names(rec)[order(rec,decreasing = TRUE)]),]$genres
 top_recom_movies
