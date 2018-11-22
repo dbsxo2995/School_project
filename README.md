@@ -1,1 +1,1 @@
-# School_project
+# 각종 프로젝트 자료 
